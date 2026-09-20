@@ -77,10 +77,12 @@ python scripts/benchmark.py --comprimento 5 --processos-lista 1,2,4,8 --repetico
 python scripts/plot_speedup.py
 ```
 
-Suba o dashboard (fica acessível em `http://<IP-público>:8080`):
+Suba o dashboard (painel de controle; fica acessível em
+`http://<IP-público>:8080`, onde você escolhe método/processos/comprimento e
+dispara a execução):
 
 ```bash
-python paralelo/cracker_par.py --comprimento 6 --processos $(nproc) --dashboard --porta 8080
+python dashboard/app.py --porta 8080
 ```
 
 ### Rodar o dashboard como serviço (opcional)
@@ -94,7 +96,7 @@ sudo dnf install -y tmux
 tmux new -s dashboard
 # dentro do tmux:
 source .venv/bin/activate
-python paralelo/cracker_par.py --comprimento 6 --processos $(nproc) --dashboard --porta 8080
+python dashboard/app.py --porta 8080
 # solte a sessão com Ctrl+B, D (segue rodando). Reanexe com: tmux attach -t dashboard
 ```
 
@@ -107,7 +109,7 @@ After=network.target
 [Service]
 User=ec2-user
 WorkingDirectory=/home/ec2-user/quebrador
-ExecStart=/home/ec2-user/quebrador/.venv/bin/python paralelo/cracker_par.py --comprimento 6 --processos 8 --dashboard --porta 8080
+ExecStart=/home/ec2-user/quebrador/.venv/bin/python dashboard/app.py --porta 8080
 Restart=on-failure
 
 [Install]

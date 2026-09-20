@@ -21,14 +21,16 @@ comum/         código compartilhado
   keyspace.py    espaço de busca determinístico + particionamento
   hashutil.py    gerar hash-alvo e conferir candidato
   estado.py      dict compartilhado + Lock (seção crítica)
+  motor.py       worker + orquestração de processos (usado pela CLI e pelo web)
   config.py      argumentos de linha de comando comuns
 sequencial/
-  cracker_seq.py versão sequencial (linha de base)
+  cracker_seq.py versão sequencial (linha de base, medição)
 paralelo/
-  cracker_par.py versão paralela (multiprocessing.Process)
+  cracker_par.py versão paralela (multiprocessing.Process, medição)
 dashboard/
-  app.py                 servidor Flask
-  templates/status.html  página com auto-refresh (polling 500 ms)
+  app.py                 servidor Flask (painel de controle)
+  orquestrador.py        dispara e acompanha as execuções pedidas pelo web
+  templates/status.html  painel + auto-refresh (polling 500 ms)
 scripts/
   benchmark.py     mede tempos e grava resultados.csv
   plot_speedup.py  gera grafico_speedup.png (medido vs. Amdahl)
@@ -65,14 +67,24 @@ python paralelo/cracker_par.py --comprimento 5
 python paralelo/cracker_par.py --comprimento 5 --processos 4
 ```
 
-### Dashboard ao vivo
+### Dashboard ao vivo (painel de controle)
+O dashboard é um **servidor** que você sobe uma vez; pela própria página você
+escolhe o **método** (sequencial/paralelo), o **nº de processos** e o
+**comprimento**, e dispara a execução — sem precisar da linha de comando.
+
 ```bash
-python paralelo/cracker_par.py --comprimento 6 --processos 8 --dashboard --porta 8080
+python dashboard/app.py --porta 8080
 ```
-Abra <http://localhost:8080>. A página faz polling em `/api/status` a cada
-500 ms e mostra barra de progresso por processo, tempo decorrido e um
-destaque grande quando a senha é encontrada. O dashboard fica no ar após a
-varredura até você encerrar com `Ctrl+C`.
+Abra <http://localhost:8080>, configure os parâmetros e clique em **Iniciar**.
+A página faz polling em `/api/status` a cada 500 ms e mostra barra de
+progresso por processo, tempo decorrido e um destaque grande quando a senha é
+encontrada. Encerre o servidor com `Ctrl+C`.
+
+Rotas: `GET /` (painel), `GET /api/status` (JSON), `POST /api/iniciar`
+(`{metodo, comprimento, charset, n_processos}`).
+
+> As CLIs `cracker_seq.py`/`cracker_par.py` continuam existindo para as
+> **medições do benchmark**; o dashboard é a via interativa/visual.
 
 Argumentos comuns a `cracker_seq.py`/`cracker_par.py`:
 

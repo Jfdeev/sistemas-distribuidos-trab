@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "dashboard",
-      "runtimeExecutable": "python",
+      "runtimeExecutable": "C:\\Users\\dti-\\.pyenv\\pyenv-win\\versions\\3.10.10\\python.exe",
       "runtimeArgs": ["dashboard/app.py", "--porta", "8080"],
       "port": 8080
     }
