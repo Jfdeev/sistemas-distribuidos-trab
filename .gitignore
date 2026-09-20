@@ -1,0 +1,10 @@
+# Artefatos gerados pelo benchmark/plot (reproduzíveis)
+resultados.csv
+grafico_speedup.png
+relatorio.pdf
+
+# Ambiente virtual e caches
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/

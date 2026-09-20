@@ -1,0 +1,5 @@
+# Dependências do projeto (Python 3.11+).
+# O núcleo (quebradores, keyspace, hash) usa só a biblioteca padrão.
+Flask>=3.0        # dashboard web ao vivo
+matplotlib>=3.8   # gráfico de speedup (plot_speedup.py)
+pytest>=8.0       # testes automatizados

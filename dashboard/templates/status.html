@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Quebrador — painel de controle</title>
+  <style>
+    :root {
+      --bg: #0f172a; --card: #1e293b; --txt: #e2e8f0; --muted: #94a3b8;
+      --borda: #334155; --barra-fundo: #334155; --barra: #38bdf8;
+      --ok: #22c55e; --acento: #f472b6; --aviso: #f59e0b; --erro: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 24px; background: var(--bg); color: var(--txt);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    h1 { font-size: 1.4rem; margin: 0 0 4px; }
+    h2 { font-size: 1rem; color: var(--muted); margin: 22px 0 10px; }
+    .sub { color: var(--muted); font-size: .9rem; margin-bottom: 20px; }
+    .painel {
+      background: var(--card); border-radius: 12px; padding: 18px 20px; margin-bottom: 22px;
+    }
+    .form-linha { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; }
+    .campo { display: flex; flex-direction: column; gap: 4px; }
+    .campo label { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+    .campo input, .campo select {
+      background: var(--bg); color: var(--txt); border: 1px solid var(--borda);
+      border-radius: 8px; padding: 8px 10px; font-size: .95rem; min-width: 120px;
+    }
+    .campo input:disabled { opacity: .4; }
+    button#iniciar {
+      background: var(--barra); color: #06210f; border: 0; border-radius: 8px;
+      padding: 10px 22px; font-size: .95rem; font-weight: 700; cursor: pointer;
+    }
+    button#iniciar:disabled { opacity: .5; cursor: not-allowed; }
+    .badge {
+      display: inline-block; padding: 3px 10px; border-radius: 999px;
+      font-size: .78rem; font-weight: 700; margin-left: 8px;
+    }
+    .badge.ocioso { background: var(--borda); color: var(--muted); }
+    .badge.rodando { background: var(--aviso); color: #3a2606; }
+    .badge.concluido { background: var(--ok); color: #06210f; }
+    .badge.erro { background: var(--erro); color: #2a0606; }
+    .msg-erro { color: var(--erro); font-size: .85rem; margin-top: 10px; min-height: 1em; }
+    .grid-topo {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 12px; margin-bottom: 8px;
+    }
+    .metrica { background: var(--card); border-radius: 10px; padding: 14px 16px; }
+    .metrica .rotulo { color: var(--muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; }
+    .metrica .valor { font-size: 1.5rem; font-weight: 700; margin-top: 4px; }
+    .processo { background: var(--card); border-radius: 10px; padding: 12px 16px; margin-bottom: 10px; }
+    .processo .cabeca { display: flex; justify-content: space-between; font-size: .85rem; margin-bottom: 8px; }
+    .processo .cabeca .concluido { color: var(--ok); font-weight: 700; }
+    .barra-fundo { background: var(--barra-fundo); border-radius: 999px; height: 14px; overflow: hidden; }
+    .barra { background: var(--barra); height: 100%; width: 0; transition: width .3s ease; }
+    .barra.ok { background: var(--ok); }
+    #achado {
+      display: none; margin: 20px 0; padding: 26px; border-radius: 14px;
+      background: linear-gradient(135deg, #16a34a, #22c55e); color: #06210f;
+      text-align: center; box-shadow: 0 10px 40px rgba(34,197,94,.35);
+    }
+    #achado.visivel { display: block; animation: aparece .4s ease; }
+    #achado .titulo { font-size: 1.05rem; text-transform: uppercase; letter-spacing: .1em; }
+    #achado .senha { font-size: 2.2rem; font-weight: 800; margin: 8px 0; font-family: ui-monospace, monospace; }
+    #achado .detalhe { font-size: .95rem; opacity: .85; }
+    @keyframes aparece { from { transform: scale(.96); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    code { color: var(--acento); word-break: break-all; }
+    #ocioso-aviso { color: var(--muted); font-size: .9rem; }
+  </style>
+</head>
+<body>
+  <h1>Quebrador de hash <span id="badge" class="badge ocioso">ocioso</span></h1>
+  <div class="sub">Configure e dispare a execução abaixo. Atualiza a cada 500&nbsp;ms.</div>
+
+  <!-- Painel de controle -->
+  <div class="painel">
+    <div class="form-linha">
+      <div class="campo">
+        <label for="metodo">Método</label>
+        <select id="metodo">
+          <option value="paralelo">Paralelo</option>
+          <option value="sequencial">Sequencial (1 processo)</option>
+        </select>
+      </div>
+      <div class="campo">
+        <label for="processos">Nº de processos</label>
+        <input type="number" id="processos" min="1" max="256" value="{{ cpu_count }}" />
+      </div>
+      <div class="campo">
+        <label for="comprimento">Comprimento</label>
+        <input type="number" id="comprimento" min="1" max="8" value="5" />
+      </div>
+      <div class="campo" style="flex:1;min-width:220px;">
+        <label for="charset">Charset</label>
+        <input type="text" id="charset" value="abcdefghijklmnopqrstuvwxyz0123456789" />
+      </div>
+      <button id="iniciar">Iniciar</button>
+    </div>
+    <div class="msg-erro" id="msg-erro"></div>
+    <div class="sub" style="margin:10px 0 0;">
+      vCPUs disponíveis: <strong>{{ cpu_count }}</strong>. Dica: comprimento 6
+      dá alguns minutos de barras enchendo; 3–4 termina quase instantâneo.
+    </div>
+  </div>
+
+  <div id="achado">
+    <div class="titulo">Senha encontrada!</div>
+    <div class="senha" id="achado-senha">—</div>
+    <div class="detalhe" id="achado-detalhe"></div>
+  </div>
+
+  <div class="grid-topo">
+    <div class="metrica"><div class="rotulo">Alvo SHA-256</div><div class="valor" style="font-size:.8rem;word-break:break-all;" id="hash-alvo">—</div></div>
+    <div class="metrica"><div class="rotulo">Tempo decorrido</div><div class="valor" id="tempo">—</div></div>
+    <div class="metrica"><div class="rotulo">Testados</div><div class="valor" id="testados">—</div></div>
+    <div class="metrica"><div class="rotulo">Progresso total</div><div class="valor" id="pct-total">—</div></div>
+  </div>
+
+  <h2>Por processo</h2>
+  <div id="processos-lista"><div id="ocioso-aviso">Nenhuma execução ainda. Configure acima e clique em <strong>Iniciar</strong>.</div></div>
+
+  <script>
+    const fmt = (n) => (n ?? 0).toLocaleString("pt-BR");
+    const $ = (id) => document.getElementById(id);
+
+    // Sequencial => campo de processos desabilitado (sempre 1 processo).
+    function ajustarFormPorMetodo() {
+      const seq = $("metodo").value === "sequencial";
+      $("processos").disabled = seq;
+    }
+    $("metodo").addEventListener("change", ajustarFormPorMetodo);
+    ajustarFormPorMetodo();
+
+    async function iniciar() {
+      $("msg-erro").textContent = "";
+      const metodo = $("metodo").value;
+      const corpo = {
+        metodo,
+        comprimento: parseInt($("comprimento").value, 10),
+        charset: $("charset").value,
+        n_processos: metodo === "sequencial" ? 1 : parseInt($("processos").value, 10),
+      };
+      try {
+        const resp = await fetch("/api/iniciar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(corpo),
+        });
+        const dados = await resp.json();
+        if (!resp.ok || !dados.ok) {
+          $("msg-erro").textContent = dados.erro || "não foi possível iniciar.";
+        }
+      } catch (e) {
+        $("msg-erro").textContent = "erro de rede ao iniciar.";
+      }
+    }
+    $("iniciar").addEventListener("click", iniciar);
+
+    function atualizarBadge(situacao) {
+      const badge = $("badge");
+      badge.className = "badge " + (situacao || "ocioso");
+      badge.textContent = situacao || "ocioso";
+      // Só permite iniciar quando não estiver rodando.
+      $("iniciar").disabled = situacao === "rodando";
+    }
+
+    function render(estado) {
+      atualizarBadge(estado.situacao);
+      if (estado.erro) $("msg-erro").textContent = estado.erro;
+
+      // Sem execução ainda: mantém o placeholder.
+      if (estado.total_candidatos === undefined) {
+        return;
+      }
+
+      $("hash-alvo").textContent = estado.hash_alvo;
+      $("tempo").textContent = (estado.tempo_decorrido_s ?? 0).toFixed(1) + " s";
+      $("testados").textContent = fmt(estado.testados_total);
+
+      const total = estado.total_candidatos || 1;
+      const pctTotal = Math.min(100, (estado.testados_total / total) * 100);
+      $("pct-total").textContent = pctTotal.toFixed(1) + "%";
+
+      const tamanhoFatia = total / (estado.n_processos || 1);
+      const fatias = Object.keys(estado.progresso).sort((a, b) => a - b);
+      const lista = $("processos-lista");
+
+      if (fatias.length === 0) {
+        lista.innerHTML = `<div id="ocioso-aviso">Iniciando processos…</div>`;
+      } else {
+        lista.innerHTML = fatias.map((id) => {
+          const p = estado.progresso[id];
+          const pct = Math.min(100, (p.testados / tamanhoFatia) * 100);
+          const selo = p.concluido
+            ? `<span class="concluido">concluída · ${p.duracao_s?.toFixed(2)} s</span>`
+            : `<span>${pct.toFixed(1)}%</span>`;
+          return `
+            <div class="processo">
+              <div class="cabeca"><span>Fatia ${id} · PID ${p.pid}</span>${selo}</div>
+              <div class="barra-fundo"><div class="barra ${p.concluido ? "ok" : ""}" style="width:${pct}%"></div></div>
+              <div style="color:var(--muted);font-size:.75rem;margin-top:6px;">${fmt(p.testados)} testados</div>
+            </div>`;
+        }).join("");
+      }
+
+      const achado = $("achado");
+      if (estado.resultado_final) {
+        $("achado-senha").textContent = estado.resultado_final.senha;
+        $("achado-detalhe").textContent =
+          `Encontrada pela fatia ${estado.resultado_final.processo} (PID ${estado.resultado_final.pid}).`;
+        achado.classList.add("visivel");
+      } else {
+        achado.classList.remove("visivel");
+      }
+    }
+
+    async function atualizar() {
+      try {
+        const resp = await fetch("/api/status");
+        if (resp.ok) render(await resp.json());
+      } catch (e) { /* servidor pode não estar pronto entre polls */ }
+    }
+
+    setInterval(atualizar, 500);
+    atualizar();
+  </script>
+</body>
+</html>
