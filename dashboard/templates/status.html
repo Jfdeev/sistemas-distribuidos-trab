@@ -96,9 +96,22 @@
         <label for="charset">Charset</label>
         <input type="text" id="charset" value="abcdefghijklmnopqrstuvwxyz0123456789" />
       </div>
+    </div>
+    <div class="form-linha" style="margin-top:12px;">
+      <div class="campo" style="flex:2;min-width:260px;">
+        <label for="hash-alvo-in">Hash-alvo (hex) — vazio = pior caso</label>
+        <input type="text" id="hash-alvo-in" placeholder="ex.: 9f86d081…  (64 hex)" />
+      </div>
+      <div class="campo" style="flex:1;min-width:160px;">
+        <label for="senha-in">…ou senha p/ gerar o alvo</label>
+        <input type="text" id="senha-in" placeholder="ex.: test" />
+      </div>
       <button id="iniciar">Iniciar</button>
     </div>
     <div class="msg-erro" id="msg-erro"></div>
+    <div class="sub" style="margin:6px 0 0;">
+      A senha tem precedência sobre o hash. Ambos vazios = pior caso (última senha do espaço).
+    </div>
     <div class="sub" style="margin:10px 0 0;">
       vCPUs disponíveis: <strong>{{ cpu_count }}</strong>. Dica: comprimento 6
       dá alguns minutos de barras enchendo; 3–4 termina quase instantâneo.
@@ -111,11 +124,17 @@
     <div class="detalhe" id="achado-detalhe"></div>
   </div>
 
+  <div id="nao-achado" style="display:none;margin:20px 0;padding:16px;border-radius:12px;background:var(--card);border:1px solid var(--aviso);color:var(--aviso);text-align:center;">
+    Varredura concluída — <strong>senha não encontrada neste espaço de busca</strong>
+    (o alvo pode estar fora do charset/comprimento configurados).
+  </div>
+
   <div class="grid-topo">
     <div class="metrica"><div class="rotulo">Alvo SHA-256</div><div class="valor" style="font-size:.8rem;word-break:break-all;" id="hash-alvo">—</div></div>
     <div class="metrica"><div class="rotulo">Tempo decorrido</div><div class="valor" id="tempo">—</div></div>
     <div class="metrica"><div class="rotulo">Testados</div><div class="valor" id="testados">—</div></div>
     <div class="metrica"><div class="rotulo">Progresso total</div><div class="valor" id="pct-total">—</div></div>
+    <div class="metrica"><div class="rotulo">Contador sob lock</div><div class="valor" style="font-size:1rem;" id="contador">—</div></div>
   </div>
 
   <h2>Por processo</h2>
@@ -141,6 +160,8 @@
         comprimento: parseInt($("comprimento").value, 10),
         charset: $("charset").value,
         n_processos: metodo === "sequencial" ? 1 : parseInt($("processos").value, 10),
+        hash_alvo: $("hash-alvo-in").value,
+        senha: $("senha-in").value,
       };
       try {
         const resp = await fetch("/api/iniciar", {
@@ -183,6 +204,12 @@
       const pctTotal = Math.min(100, (estado.testados_total / total) * 100);
       $("pct-total").textContent = pctTotal.toFixed(1) + "%";
 
+      // Contador global somado sob lock: prova de sincronização correta.
+      const cont = $("contador");
+      const ok = estado.contador_confere;
+      cont.textContent = fmt(estado.contador_global) + (estado.concluido ? (ok ? " ✓" : " ✗ corrida!") : "");
+      cont.style.color = estado.concluido ? (ok ? "var(--ok)" : "var(--erro)") : "var(--txt)";
+
       const tamanhoFatia = total / (estado.n_processos || 1);
       const fatias = Object.keys(estado.progresso).sort((a, b) => a - b);
       const lista = $("processos-lista");
@@ -214,6 +241,10 @@
       } else {
         achado.classList.remove("visivel");
       }
+
+      // Concluiu sem achar (alvo fora do espaço): avisa em vez de ficar mudo.
+      $("nao-achado").style.display =
+        estado.concluido && !estado.resultado_final ? "block" : "none";
     }
 
     async function atualizar() {

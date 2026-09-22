@@ -45,10 +45,32 @@ def test_sequencial_forca_um_processo():
         orq.encerrar()
 
 
+def test_iniciar_com_senha_customizada():
+    """Alvo vindo de uma senha específica dentro do espaço."""
+    orq = Orquestrador()
+    try:
+        # senha "abab" está no espaço "ab"^4.
+        orq.iniciar(
+            metodo="paralelo", comprimento=4, charset="ab", n_processos=4, senha="abab"
+        )
+        estado = _esperar_conclusao(orq)
+        assert estado["situacao"] == "concluido"
+        assert estado["resultado_final"]["senha"] == "abab"
+    finally:
+        orq.encerrar()
+
+
 def test_metodo_invalido_e_rejeitado():
     orq = Orquestrador()
     with pytest.raises(ValueError):
         orq.iniciar(metodo="turbo", comprimento=2, charset="ab", n_processos=1)
+
+
+def test_senha_fora_do_espaco_e_rejeitada():
+    orq = Orquestrador()
+    with pytest.raises(ValueError):
+        # "abc" tem char fora do charset "ab".
+        orq.iniciar(metodo="paralelo", comprimento=4, charset="ab", n_processos=2, senha="abc")
 
 
 def test_charset_invalido_e_rejeitado():

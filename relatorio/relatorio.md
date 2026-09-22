@@ -89,7 +89,23 @@ Manager por atualizações frequentes demais.
 
 - Primitiva de exclusão mútua: **`multiprocessing.Lock()`**.
 - Estrutura compartilhada: **`multiprocessing.Manager().dict()`**.
-- Granularidade da seção crítica: mínima (só o *test-and-set* do resultado).
+- Granularidade da seção crítica: mínima (não há trava em volta do laço).
+
+### 3.1. Seção crítica contestada: o contador global
+
+Além do `resultado_final`, mantemos um **contador global** no dict
+compartilhado que **todos** os processos incrementam sob o mesmo `Lock()`, em
+lotes de 50 000 candidatos (`comum/estado.py::somar_ao_contador_global`). É um
+*read-modify-write* sobre a **mesma** variável: sem o lock, dois processos leem
+o mesmo valor e um sobrescreve o outro (*lost update*).
+
+Isto torna a sincronização **demonstrável**: com o lock, o contador fecha
+exatamente com o tamanho do espaço em toda execução; com a flag `--sem-lock`
+(num espaço grande, ex.: comprimento 5 com 12 processos), o total **não fecha**
+— evidência direta da condição de corrida que o lock previne.
+
+- Medição real: com lock, `[PREENCHER: contador]` = `[PREENCHER: total]` (fecha).
+- Com `--sem-lock`: `[PREENCHER: contador]` < `[PREENCHER: total]` (corrida).
 
 ## 4. Recursos provisionados
 

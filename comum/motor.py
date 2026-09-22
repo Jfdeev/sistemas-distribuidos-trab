@@ -37,16 +37,25 @@ def trabalhar(
     pid = os.getpid()
     marco = time.perf_counter()
     testados = 0
+    pendente = 0  # candidatos ainda não contabilizados no contador global
 
     for candidato in espaco.gerar_intervalo(inicio, fim):
         testados += 1
+        pendente += 1
         if confere(candidato, hash_alvo):
             # A escrita em resultado_final é a seção crítica; a serialização
             # via Lock está encapsulada em tentar_registrar_resultado().
             estado.tentar_registrar_resultado(candidato, id_fatia, pid)
             # Sem early-stop: continua varrendo a fatia até o fim.
-        if testados % LOTE_ATUALIZACAO == 0:
+        if pendente >= LOTE_ATUALIZACAO:
             estado.registrar_progresso(id_fatia, pid, testados)
+            # Soma o lote ao contador global (seção crítica contestada).
+            estado.somar_ao_contador_global(pendente)
+            pendente = 0
+
+    # Contabiliza o resto do lote que não completou LOTE_ATUALIZACAO.
+    if pendente:
+        estado.somar_ao_contador_global(pendente)
 
     duracao = time.perf_counter() - marco
     estado.registrar_conclusao(id_fatia, pid, testados, duracao)
@@ -101,5 +110,8 @@ def montar_resumo(
         "tempo_s": foto["tempo_decorrido_s"],
         "n_processos": n_processos,
         "total_candidatos": espaco.tamanho_total(),
+        "contador_global": foto["contador_global"],
+        "contador_confere": foto["contador_confere"],
+        "usou_lock": foto["usar_lock"],
         "tempos_por_processo_s": tempos_por_processo,
     }

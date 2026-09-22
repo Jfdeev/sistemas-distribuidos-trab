@@ -17,8 +17,8 @@ import multiprocessing as mp
 import threading
 from typing import Any, Optional
 
+from comum.config import resolver_hash_alvo
 from comum.estado import EstadoCompartilhado
-from comum.hashutil import hash_de
 from comum.keyspace import EspacoDeBusca
 from comum.motor import executar_paralelo
 
@@ -52,8 +52,14 @@ class Orquestrador:
         comprimento: int,
         charset: str,
         n_processos: int,
+        hash_alvo: str | None = None,
+        senha: str | None = None,
     ) -> None:
-        """Inicia uma nova execução. Levanta se já houver uma em andamento."""
+        """Inicia uma nova execução. Levanta se já houver uma em andamento.
+
+        O alvo pode vir de ``senha`` (o painel calcula o hash dela), de
+        ``hash_alvo`` (hex), ou, se ambos vazios, do pior caso (padrão).
+        """
         metodo = metodo.lower()
         if metodo not in _METODOS_VALIDOS:
             raise ValueError("metodo deve ser 'sequencial' ou 'paralelo'")
@@ -62,7 +68,7 @@ class Orquestrador:
         # entrada inválida não derrube uma execução anterior já concluída.
         espaco = EspacoDeBusca(charset=charset, comprimento=comprimento)
         n = 1 if metodo == "sequencial" else max(1, n_processos)
-        hash_alvo = hash_de(espaco.senha_alvo())
+        hash_alvo = resolver_hash_alvo(espaco, hash_alvo=hash_alvo, senha=senha)
 
         with self._lock:
             if self._situacao == "rodando":

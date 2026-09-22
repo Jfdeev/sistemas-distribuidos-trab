@@ -56,12 +56,19 @@ def criar_app(orquestrador: Orquestrador | None = None) -> Flask:
         except (TypeError, ValueError):
             return jsonify({"ok": False, "erro": "parâmetros inválidos"}), 400
 
+        # Alvo opcional: hash em hex ou uma senha (o servidor gera o hash).
+        # Vazios/ausentes => pior caso (comportamento padrão).
+        hash_alvo = (dados.get("hash_alvo") or "").strip() or None
+        senha = (dados.get("senha") or "").strip() or None
+
         try:
             orquestrador.iniciar(
                 metodo=metodo,
                 comprimento=comprimento,
                 charset=charset,
                 n_processos=n_processos,
+                hash_alvo=hash_alvo,
+                senha=senha,
             )
         except ExecucaoOcupadaError as exc:
             return jsonify({"ok": False, "erro": str(exc)}), 409

@@ -29,7 +29,8 @@ class EstadoCompartilhado:
 
     CHAVE_RESULTADO = "resultado_final"
     CHAVE_META = "meta"
-    _CHAVES_RESERVADAS = frozenset({CHAVE_RESULTADO, CHAVE_META})
+    CHAVE_CONTADOR = "contador_global"
+    _CHAVES_RESERVADAS = frozenset({CHAVE_RESULTADO, CHAVE_META, CHAVE_CONTADOR})
 
     def __init__(
         self,
@@ -40,12 +41,18 @@ class EstadoCompartilhado:
         hash_alvo: str,
         charset: str,
         comprimento: int,
+        usar_lock: bool = True,
     ) -> None:
         # Dict compartilhado entre todos os processos.
         self.dados = gerente.dict()
-        # Primitiva de sincronização que protege a seção crítica.
+        # Primitiva de sincronização que protege as seções críticas.
         self.lock = mp.Lock()
+        # Se False, as seções críticas rodam SEM o lock — apenas para
+        # demonstrar a condição de corrida ao vivo (ver `somar_ao_contador_global`).
+        self.usar_lock = usar_lock
         self.dados[self.CHAVE_META] = {"inicio": None, "fim": None}
+        # Contador global compartilhado, escrito por TODOS os processos.
+        self.dados[self.CHAVE_CONTADOR] = 0
 
         # Metadados imutáveis após a criação. São lidos apenas pelo dashboard,
         # que roda no processo principal; os trabalhadores recebem uma cópia
@@ -106,6 +113,33 @@ class EstadoCompartilhado:
                 }
         # ====================== FIM DA SEÇÃO CRÍTICA =======================
 
+    def somar_ao_contador_global(self, quantidade: int) -> None:
+        """Soma ``quantidade`` ao contador global compartilhado.
+
+        Esta é a seção crítica *contestada* do programa: TODOS os processos
+        incrementam a MESMA variável (`contador_global`) num padrão
+        ler-modificar-escrever. Como o Manager atende cada leitura e cada
+        escrita como operações separadas, sem o lock dois processos podem ler
+        o mesmo valor antigo e sobrescrever um ao outro — o clássico
+        *lost update* (condição de corrida). Com o lock, o total sempre fecha
+        exatamente com o tamanho do espaço de busca.
+
+        O incremento é feito em LOTES (não a cada candidato) para não
+        transformar isto numa trava em volta do laço inteiro — o que mataria
+        o paralelismo.
+        """
+        if self.usar_lock:
+            # =================== INÍCIO DA SEÇÃO CRÍTICA ===================
+            with self.lock:
+                self.dados[self.CHAVE_CONTADOR] = (
+                    self.dados.get(self.CHAVE_CONTADOR, 0) + quantidade
+                )
+            # ==================== FIM DA SEÇÃO CRÍTICA =====================
+        else:
+            # Versão SEM sincronização — só para demonstrar a corrida ao vivo.
+            atual = self.dados.get(self.CHAVE_CONTADOR, 0)
+            self.dados[self.CHAVE_CONTADOR] = atual + quantidade
+
     def marcar_inicio(self) -> None:
         self._atualizar_meta("inicio", time.time())
 
@@ -125,6 +159,7 @@ class EstadoCompartilhado:
         bruto = dict(self.dados)  # cópia rasa dos itens do Manager dict
         meta = bruto.get(self.CHAVE_META, {})
         resultado = bruto.get(self.CHAVE_RESULTADO)
+        contador_global = bruto.get(self.CHAVE_CONTADOR, 0)
 
         fatias = {
             chave: valor
@@ -148,6 +183,11 @@ class EstadoCompartilhado:
             "comprimento": self.comprimento,
             "tempo_decorrido_s": decorrido,
             "testados_total": testados_total,
+            "contador_global": contador_global,
+            # True quando o contador global (somado sob lock) fecha com o total:
+            # prova visual de que não houve condição de corrida.
+            "contador_confere": contador_global == self.total_candidatos,
+            "usar_lock": self.usar_lock,
             "progresso": fatias,
             "resultado_final": resultado,
             "concluido": fim is not None,

@@ -53,3 +53,33 @@ def test_iniciar_com_metodo_invalido_retorna_400(cliente):
     resp = cliente.post("/api/iniciar", json={"metodo": "turbo", "comprimento": 2, "charset": "ab"})
     assert resp.status_code == 400
     assert resp.get_json()["ok"] is False
+
+
+def test_iniciar_com_senha_customizada(cliente):
+    resp = cliente.post(
+        "/api/iniciar",
+        json={
+            "metodo": "paralelo", "comprimento": 4, "charset": "ab",
+            "n_processos": 2, "senha": "baba",
+        },
+    )
+    assert resp.status_code == 200
+
+    limite = time.time() + 20
+    dados = {}
+    while time.time() < limite:
+        dados = cliente.get("/api/status").get_json()
+        if dados["situacao"] in ("concluido", "erro"):
+            break
+        time.sleep(0.05)
+    assert dados["situacao"] == "concluido"
+    assert dados["resultado_final"]["senha"] == "baba"
+
+
+def test_iniciar_com_hash_invalido_retorna_400(cliente):
+    resp = cliente.post(
+        "/api/iniciar",
+        json={"metodo": "paralelo", "comprimento": 4, "charset": "ab", "hash_alvo": "xyz"},
+    )
+    assert resp.status_code == 400
+    assert resp.get_json()["ok"] is False

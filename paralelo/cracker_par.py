@@ -49,6 +49,14 @@ def _imprimir_resumo(resumo: dict) -> None:
     print(f"Senha encontrada   : {resumo['senha']}")
     print(f"Encontrada pela fatia: {resumo['processo_que_encontrou']}")
     print(f"Candidatos testados: {resumo['testados']:,}".replace(",", "."))
+    # Contador global somado por todos os processos na seção crítica.
+    selo = "OK (fechou)" if resumo["contador_confere"] else "ERRO (condição de corrida!)"
+    lock = "com lock" if resumo["usou_lock"] else "SEM lock"
+    print(
+        f"Contador global ({lock}): {resumo['contador_global']:,}".replace(",", ".")
+        + f" / {resumo['total_candidatos']:,}".replace(",", ".")
+        + f"  -> {selo}"
+    )
     print(f"Tempo total (parede): {resumo['tempo_s']:.3f} s")
     print("Tempo por processo:")
     for fatia, duracao in resumo["tempos_por_processo_s"].items():
@@ -66,6 +74,14 @@ def main(argv: list[str] | None = None) -> None:
         type=int,
         default=os.cpu_count(),
         help="Número de processos (padrão: nº de vCPUs = %(default)s).",
+    )
+    parser.add_argument(
+        "--sem-lock",
+        action="store_true",
+        help=(
+            "Roda o contador global SEM o lock (apenas para demonstrar a "
+            "condição de corrida ao vivo). Não use para medir speedup."
+        ),
     )
     args = parser.parse_args(argv)
 
@@ -89,6 +105,7 @@ def main(argv: list[str] | None = None) -> None:
             hash_alvo=hash_alvo,
             charset=espaco.charset,
             comprimento=espaco.comprimento,
+            usar_lock=not args.sem_lock,
         )
         resumo = executar_paralelo(espaco, hash_alvo, n_processos, estado)
         _imprimir_resumo(resumo)

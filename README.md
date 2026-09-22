@@ -34,6 +34,7 @@ dashboard/
 scripts/
   benchmark.py     mede tempos e grava resultados.csv
   plot_speedup.py  gera grafico_speedup.png (medido vs. Amdahl)
+  verificar.py     prova que a paralela produz o mesmo que a sequencial
 deploy/README.md   provisionamento no AWS Academy Learner Lab
 relatorio/relatorio.md  esqueleto do relatório técnico
 tests/             testes pytest
@@ -80,8 +81,16 @@ A página faz polling em `/api/status` a cada 500 ms e mostra barra de
 progresso por processo, tempo decorrido e um destaque grande quando a senha é
 encontrada. Encerre o servidor com `Ctrl+C`.
 
+No painel também dá para **escolher o alvo**: um campo **hash-alvo (hex)** ou
+uma **senha** (o servidor calcula o SHA-256 dela) — ótimo para demo ("digite
+uma senha e veja o sistema achá-la"). Ambos vazios = pior caso. A senha tem
+precedência; se o alvo não estiver no espaço, a varredura termina avisando
+"senha não encontrada".
+
 Rotas: `GET /` (painel), `GET /api/status` (JSON), `POST /api/iniciar`
-(`{metodo, comprimento, charset, n_processos}`).
+(`{metodo, comprimento, charset, n_processos, hash_alvo?, senha?}`).
+
+Na CLI, o mesmo se faz com `--hash-alvo HEX` ou `--senha-alvo SENHA`.
 
 > As CLIs `cracker_seq.py`/`cracker_par.py` continuam existindo para as
 > **medições do benchmark**; o dashboard é a via interativa/visual.
@@ -95,29 +104,64 @@ Argumentos comuns a `cracker_seq.py`/`cracker_par.py`:
 | `--hash-alvo`    | pior caso         | SHA-256 alvo; se omitido, usa a última senha |
 | `--processos`    | nº de vCPUs       | (só no paralelo) quantidade de processos     |
 
+## Verificação e demonstração da seção crítica
+
+**Provar que a paralela == sequencial** (resultado verificável, exigido na lauda):
+```bash
+python scripts/verificar.py --comprimento 4 --processos 8
+```
+
+**Demonstrar a seção crítica ao vivo** (a lauda dá 0,5 ponto para
+sincronização correta). Todos os processos somam um **contador global** sob um
+`multiprocessing.Lock()`. Com o lock, o total sempre fecha; **sem** o lock, há
+*lost updates* (condição de corrida) — use `--sem-lock` num espaço grande para
+ver isso reproduzir de forma confiável:
+
+```bash
+# com lock  -> "Contador global (com lock): 60.466.176 / 60.466.176 -> OK"
+python paralelo/cracker_par.py --comprimento 5 --processos 12
+
+# sem lock  -> total NÃO fecha (condição de corrida), roda algumas vezes
+python paralelo/cracker_par.py --comprimento 5 --processos 12 --sem-lock
+```
+
+O dashboard também mostra esse contador ao vivo (fica verde com ✓ quando fecha).
+
 ## Calibrando o tamanho do espaço de busca ⚠️
 
 O enunciado cita "6 caracteres, `[a-z0-9]`" (36⁶ ≈ **2,2 bilhões** de
 candidatos), inviável de varrer inteiro em Python puro várias vezes. Por isso
-o **comprimento é configurável** e o padrão é 5.
+o **comprimento e o charset são configuráveis** e o padrão é comprimento 5.
 
-**Escolha o comprimento de modo que a execução sequencial leve ~15–60 s** na
-sua máquina/instância. Como referência, medimos ~**0,77 milhão de hashes/s
-por núcleo** (Python 3.10, CPU de notebook):
+**A lauda exige que a versão sequencial leve *minutos*, não segundos.** Então
+calibre a entrada para o **sequencial levar ~2 a 4 minutos NA INSTÂNCIA da
+nuvem** (meça lá: o núcleo da nuvem costuma ser mais lento que um notebook).
+Como referência, medimos ~**0,77 milhão de hashes/s por núcleo** (Python 3.10,
+notebook):
 
-| comprimento | candidatos (`[a-z0-9]`) | tempo sequencial aprox. |
-|-------------|-------------------------|-------------------------|
-| 3           | 46 656                  | ~0,05 s (rápido demais) |
-| 4           | 1 679 616               | ~2 s                    |
-| 5 (padrão)  | 60 466 176              | ~80 s                   |
-| 6           | 2 176 782 336           | ~45 min (não recomendado)|
+| comprimento | candidatos (`[a-z0-9]`) | tempo sequencial aprox. (notebook) |
+|-------------|-------------------------|------------------------------------|
+| 3           | 46 656                  | ~0,05 s (rápido demais)            |
+| 4           | 1 679 616               | ~2 s (rápido demais)               |
+| 5 (padrão)  | 60 466 176              | ~80 s → **~2–3 min na nuvem**      |
+| 6           | 2 176 782 336           | ~45 min (grande demais)            |
+
+Comprimento 6 estoura e comprimento 5 pode ficar curto se a instância for
+rápida. Como não há passo intermediário na base 36, **ajuste fino pelo
+charset**: mais símbolos = mais candidatos. Ex.: para ~2,5× o volume do
+comprimento 5, acrescente maiúsculas ao charset:
+
+```bash
+# ~1,5 bilhão? não — este exemplo dá 45^5 ≈ 184 M (~4 min no notebook)
+python sequencial/cracker_seq.py --comprimento 5 \
+  --charset abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHI
+```
 
 > **Cuidado com espaços pequenos:** com `--comprimento 3`/`4` o custo de criar
 > processos e o Manager (~1 s) domina o tempo de cálculo, e a versão
 > paralela chega a ficar **mais lenta** que a sequencial (speedup < 1). Isso
 > não é um bug — é o custo fixo de paralelização superando um trabalho
-> minúsculo. Use `--comprimento 5` (ou 6 numa instância com muitos núcleos)
-> para que o cálculo domine e o speedup apareça.
+> minúsculo. Só meça o speedup com o sequencial na casa dos minutos.
 
 ## Como reproduzir o benchmark
 
